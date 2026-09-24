@@ -4,7 +4,7 @@ import { toast } from "react-hot-toast";
 import { PlusCircle, Upload, Loader, X, Plus } from "lucide-react";
 import { useCreateProduct } from "../queries/useProduct";
 import { useCategories } from "../queries/useCategories";
-import { useSubcategories } from "../queries/useSubcategories";
+import { useSubcategories } from "../queries/useSubCategories";
 
 const MAX_IMAGES_PER_COLOR = 10;
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
