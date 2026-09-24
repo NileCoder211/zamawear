@@ -56,6 +56,22 @@ app.use("/api/subcategories", subcategoryRoutes);
 app.use("/api/whatsapp", whatsappRoutes);
 
 
+app.use((err, req, res, next) => {
+  console.error("GLOBAL ERROR:", err.stack);
+  res.status(500).json({
+    message: err.message || "Internal Server Error",
+  });
+});
+if (process.env.NODE_ENV === "production") {
+  const frontendPath = path.join(__dirname, "frontend/dist");
+
+  app.use(express.static(frontendPath));
+
+  // ✅ Catch-all WITHOUT using path-to-regexp
+  app.use((req, res) => {
+    res.sendFile(path.join(frontendPath, "index.html"));
+  });
+} 
 
 
 
