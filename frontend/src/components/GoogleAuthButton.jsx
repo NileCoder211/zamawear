@@ -17,7 +17,7 @@
 
 export default function GoogleAuthButton({
   label = "Continue with Google",
-  href = "http://localhost:5000/api/auth/google",
+  href = "https://zamawear.onrender.com/api/auth/google",
   onClick,
   disabled = false,
 }) {
