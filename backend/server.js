@@ -3,6 +3,9 @@ import dotenv from "dotenv";
 import path from "path";
 import cookieParser from "cookie-parser";
 import cors from "cors"
+import path from "path";
+import { fileURLToPath } from "url";
+
 
 
 
@@ -55,6 +58,11 @@ app.use("/api/categories", categoryRoutes);
 app.use("/api/subcategories", subcategoryRoutes);
 app.use("/api/whatsapp", whatsappRoutes);
 
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+const frontendPath = path.join(__dirname, "../frontend/dist");
 
 app.use((err, req, res, next) => {
   console.error("GLOBAL ERROR:", err.stack);
