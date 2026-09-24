@@ -4,10 +4,17 @@ import PendingOrder from "../models/pendingorderModel.js";
 import Product from "../models/productModel.js";
 import { generateOrderNumber } from "../lib/generateOrderNumber.js";
 import { getValidCoupon, markCouponUsed, issueRewardCoupon } from "../lib/coupons.js";
+import WhatsAppOrder from "../models/whatsappOrderModel.js";
+import {sendWhatsAppText,} from "../services/whatsappService.js";
 
 // ─────────────────────────────────────────────────────────────
 // HELPERS
 // ─────────────────────────────────────────────────────────────
+const getMpesaPassword = (timestamp) => {
+  const shortcode = process.env.SHORT_CODE;
+  const passkey = process.env.PASSKEY;
+  return Buffer.from(shortcode + passkey + timestamp).toString("base64");
+};
 
 const generateToken = async () => {
   const auth = Buffer.from(
@@ -151,6 +158,8 @@ export const stkPush = async (req, res) => {
       "base64",
     );
     const phoneNumber = normalisePhone(phone);
+    // in stkPush, just before the fetch to Safaricom's stkpush endpoint
+console.log("📞 Using CallBackURL:", process.env.CALLBACK_URL);
 
     const response = await fetch(
       "https://sandbox.safaricom.co.ke/mpesa/stkpush/v1/processrequest",
@@ -425,3 +434,269 @@ export const confirmMpesaOrder = async (req, res) => {
       .json({ message: "Confirmation failed", error: error.message });
   }
 };
+
+
+
+export const whatsappStkPush =
+  async (req, res) => {
+    try {
+      const {
+        orderNumber,
+        phone,
+      } = req.body;
+
+      if (!orderNumber) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "WhatsApp order number is required",
+        });
+      }
+
+      const whatsappOrder =
+        await WhatsAppOrder.findOne({
+          orderNumber,
+        });
+
+      if (!whatsappOrder) {
+        return res.status(404).json({
+          success: false,
+          message:
+            "WhatsApp order not found",
+        });
+      }
+
+      if (
+        [
+          "paid",
+          "cancelled",
+          "expired",
+        ].includes(
+          whatsappOrder.status
+        )
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "This order cannot be paid",
+        });
+      }
+
+      if (
+        whatsappOrder.paymentStatus ===
+        "pending"
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Payment is already pending",
+        });
+      }
+
+      /*
+       * Use the phone supplied by the customer
+       * or the delivery phone.
+       */
+      const paymentPhone =
+        phone ||
+        whatsappOrder
+          .shippingAddress
+          ?.phoneNumber;
+
+      if (!paymentPhone) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "M-Pesa phone number is required",
+        });
+      }
+
+      /*
+       * IMPORTANT:
+       *
+       * We DO NOT trust the amount from the
+       * frontend/WhatsApp message.
+       *
+       * We use the amount stored on the
+       * server-side WhatsAppOrder.
+       */
+      const amount =
+        whatsappOrder.totalAmount;
+
+      /*
+       * Get Safaricom OAuth token.
+       *
+       * Use the same generateToken() function
+       * you already have in mpesaController.js.
+       */
+      const token =
+        await generateToken();
+
+      /*
+       * Use the same timestamp/password logic
+       * from your existing stkPush function.
+       *
+       * The exact code below should mirror your
+       * existing stkPush implementation.
+       */
+
+      const timestamp = getTimestamp();
+const password = getMpesaPassword(timestamp);
+const stkUrl = "https://sandbox.safaricom.co.ke/mpesa/stkpush/v1/processrequest";
+
+      const normalisedPhone =
+        normalisePhone(
+          paymentPhone
+        );
+
+      const response =
+        await fetch(stkUrl, {
+          method: "POST",
+
+          headers: {
+            Authorization:
+              `Bearer ${token}`,
+
+            "Content-Type":
+              "application/json",
+          },
+
+          body: JSON.stringify({
+            BusinessShortCode:
+              process.env
+                .MPESA_SHORTCODE,
+
+            Password: password,
+
+            Timestamp: timestamp,
+
+            TransactionType:
+              "CustomerPayBillOnline",
+
+            Amount: amount,
+
+            PartyA:
+              normalisedPhone,
+
+            PartyB:
+              process.env
+                .MPESA_SHORTCODE,
+
+            PhoneNumber:
+              normalisedPhone,
+
+            CallBackURL:
+              process.env
+                .MPESA_CALLBACK_URL,
+
+            AccountReference:
+              whatsappOrder.orderNumber,
+
+            TransactionDesc:
+              `Payment for ${whatsappOrder.orderNumber}`,
+          }),
+        });
+
+      const data =
+        await response.json();
+
+      if (
+        !response.ok ||
+        data.ResponseCode !== "0"
+      ) {
+        console.error(
+          "WhatsApp STK error:",
+          data
+        );
+
+        return res.status(400).json({
+          success: false,
+          message:
+            data.ResponseDescription ||
+            "Unable to initiate M-Pesa payment",
+        });
+      }
+
+      /*
+       * Create PendingOrder.
+       */
+      const pending =
+        await PendingOrder.create({
+          checkoutRequestId:
+            data.CheckoutRequestID,
+
+          userId: null,
+
+          channel: "whatsapp",
+
+          whatsappOrderId:
+            whatsappOrder._id,
+
+          phone:
+            normalisedPhone,
+
+          couponCode:
+            whatsappOrder.couponCode,
+
+          couponId:
+            whatsappOrder.couponId,
+
+          products:
+            whatsappOrder.products.map(
+              (item) => ({
+                product:
+                  item.product,
+
+                quantity:
+                  item.quantity,
+
+                price:
+                  item.price,
+              })
+            ),
+
+          totalAmount:
+            whatsappOrder.totalAmount,
+
+          shippingAddress:
+            whatsappOrder.shippingAddress,
+
+          status: "pending",
+        });
+
+      whatsappOrder.paymentStatus =
+        "pending";
+
+      whatsappOrder.status =
+        "payment_pending";
+
+      whatsappOrder.mpesaCheckoutRequestId =
+        data.CheckoutRequestID;
+
+      await whatsappOrder.save();
+
+      return res.status(200).json({
+        success: true,
+
+        checkoutRequestId:
+          data.CheckoutRequestID,
+
+        totalAmount:
+          amount,
+
+        pendingOrderId:
+          pending._id,
+      });
+    } catch (error) {
+      console.error(
+        "whatsappStkPush:",
+        error
+      );
+
+      return res.status(500).json({
+        success: false,
+        message:
+          "Failed to initiate WhatsApp M-Pesa payment",
+      });
+    }
+  };

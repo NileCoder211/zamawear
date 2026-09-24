@@ -179,7 +179,9 @@ export const getAllOrders = async (req, res) => {
         .limit(limit),
       Order.countDocuments(query),
       Order.aggregate([
-        { $match: { paymentStatus: "paid" } },
+        {
+          $match: { paymentStatus: "paid", orderStatus: { $ne: "cancelled" } },
+        },
         {
           $group: {
             _id: null,

@@ -2,7 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import axios from "../lib/axios";
 import { toast } from "react-hot-toast";
 
-export const useCart = ( enabled = true ) => {
+export const useCart = (enabled = true) => {
   return useQuery({
     queryKey: ["cart"],
     queryFn: async () => {
@@ -17,25 +17,20 @@ export const useAddToCart = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (product) => {
-      const cart = queryClient.getQueryData(["cart"]) ?? [];
-      const existing = cart.find((item) => item._id === product._id);
-
-      if (existing) {
-        await axios.put(`/cart/${product._id}`, {
-          quantity: existing.quantity + 1,
-        });
-        return { wasExisting: true };
-      } else {
-        await axios.post("/cart", { productId: product._id });
-        return { wasExisting: false };
-      }
+    // productId is required; color/size are optional — pass whatever
+    // the product page has selected (undefined for products with no
+    // variants, e.g. creams). The backend decides whether this
+    // matches an existing line (same productId+color+size) to
+    // increment, or becomes a new line — that matching logic isn't
+    // duplicated here, since color/size composite matching is easy
+    // to get subtly wrong twice.
+    mutationFn: async ({ productId, color, size }) => {
+      const res = await axios.post("/cart", { productId, color, size });
+      return res.data;
     },
 
-    onSuccess: ({ wasExisting }) => {
-      toast.success(
-        wasExisting ? "Quantity increased in cart" : "Product added to cart"
-      );
+    onSuccess: () => {
+      toast.success("Added to bag");
       queryClient.invalidateQueries({ queryKey: ["cart"] });
     },
 
@@ -49,17 +44,16 @@ export const useRemoveFromCart = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (productId) => {
-      // productId in the URL, no body — matches DELETE /cart/:id on
-      // the backend. Bare DELETE /cart (no id) means "clear
-      // everything" now, so this must NOT hit that path.
-      await axios.delete(`/cart/${productId}`);
+    // cartItemId is the cart LINE's own _id (from getCartProducts'
+    // cartItemId field) — not productId. The same product can now
+    // appear as more than one line (different color/size), so
+    // productId alone can't say which one to remove.
+    mutationFn: async (cartItemId) => {
+      await axios.delete(`/cart/${cartItemId}`);
     },
 
     onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: ["cart"],
-      });
+      queryClient.invalidateQueries({ queryKey: ["cart"] });
     },
 
     onError: (error) => {
@@ -72,24 +66,14 @@ export const useUpdateQuantity = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({
-      productId,
-      quantity,
-    }) => {
-      const res = await axios.put(
-        `/cart/${productId}`,
-        {
-          quantity,
-        }
-      );
-
+    // Same cartItemId-keyed approach as useRemoveFromCart.
+    mutationFn: async ({ cartItemId, quantity }) => {
+      const res = await axios.put(`/cart/${cartItemId}`, { quantity });
       return res.data;
     },
 
     onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: ["cart"],
-      });
+      queryClient.invalidateQueries({ queryKey: ["cart"] });
     },
 
     onError: (error) => {
@@ -103,17 +87,11 @@ export const useClearCart = () => {
 
   return useMutation({
     mutationFn: async () => {
-      // Bare DELETE /cart — the "/clear" suffix no longer exists on
-      // the backend; clearing and single-item removal are now
-      // distinguished by presence/absence of :id, not by path.
       await axios.delete("/cart");
     },
 
     onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: ["cart"],
-      });
-
+      queryClient.invalidateQueries({ queryKey: ["cart"] });
       toast.success("Cart cleared");
     },
 

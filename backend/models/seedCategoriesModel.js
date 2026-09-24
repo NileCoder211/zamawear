@@ -1,34 +1,57 @@
-// Run once with: node scripts/seedCategories.js
-// Safe to re-run — uses upsert-style logic so it won't create duplicates.
+// Run once with: node models/seedCategoriesModel.js
+// Safe to re-run — uses find-or-create logic so it won't create duplicates.
 
 import mongoose from "mongoose";
 import dotenv from "dotenv";
+import path from "path";
+import { fileURLToPath } from "url";
 import Category from "../models/categoryModel.js";
 import Subcategory from "../models/subcategoryModel.js";
 
-dotenv.config();
+// .env lives in the project root (zamawear/), one level above backend/,
+// so we can't rely on dotenv finding it from the current working directory.
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+dotenv.config({ path: path.resolve(__dirname, "../../.env") });
 
 const CATEGORY_STRUCTURE = [
   {
-    name: "Male",
-    subcategories: ["Shirts", "T-Shirts", "Trousers", "Jackets", "Suits", "Shoes"],
+    name: "Women",
+    subcategories: [
+      "Dresses",
+      "Shirts",
+      "Shoes",
+      "Trousers",
+      "Skirts",
+      "Sweaters",
+    ],
   },
   {
-    name: "Female",
-    subcategories: ["Dresses", "Tops", "Skirts", "Trousers", "Bags", "Shoes"],
+    name: "Men",
+    subcategories: ["Shirts", "Hats"],
   },
   {
-    name: "Children",
-    subcategories: ["Boys Wear", "Girls Wear", "Baby Wear", "Shoes"],
+    name: "Kids",
+    subcategories: [
+      "Dresses",
+      "Tops",
+      "T-Shirts",
+      "Shorts",
+      "Jackets",
+      "Sweaters",
+    ],
   },
   {
-    name: "Body Lotions & Creams",
-    subcategories: ["Body Lotion", "Body Cream", "Face Cream", "Sunscreen", "Body Oil"],
+    name: "Thrift Finds",
+    subcategories: ["Thrift Finds"],
+  },
+  {
+    name: "Creams",
+    subcategories: ["Creams"],
   },
 ];
 
 const run = async () => {
-  await mongoose.connect(process.env.MONGO_URI);
+  await mongoose.connect(process.env.MONGODB_URI);
 
   for (const cat of CATEGORY_STRUCTURE) {
     let category = await Category.findOne({ name: cat.name });
@@ -38,7 +61,10 @@ const run = async () => {
     }
 
     for (const subName of cat.subcategories) {
-      const exists = await Subcategory.findOne({ name: subName, category: category._id });
+      const exists = await Subcategory.findOne({
+        name: subName,
+        category: category._id,
+      });
       if (!exists) {
         await Subcategory.create({ name: subName, category: category._id });
         console.log(`  Created subcategory: ${subName} (under ${cat.name})`);

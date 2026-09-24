@@ -5,7 +5,7 @@ import {
   updateCouponRule,
   deleteCouponRule,
 } from "../controllers/couponRuleController.js";
-import { protectRoute, adminRoute } from "../middleware/authMiddleware.js";
+import { protectRoute, adminRoute } from "../middlewares/authMiddleware.js";
 
 const router = express.Router();
 

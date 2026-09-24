@@ -4,6 +4,15 @@ import Product from "../models/productModel.js";
 import Category from "../models/categoryModel.js";
 import Subcategory from "../models/subcategoryModel.js";
 
+const MAX_LIMIT = 48;
+const DEFAULT_LIMIT = 12;
+
+function parsePagination(query) {
+  const page = Math.max(1, parseInt(query.page, 10) || 1);
+  const limit = Math.min(MAX_LIMIT, Math.max(1, parseInt(query.limit, 10) || DEFAULT_LIMIT));
+  return { page, limit };
+}
+
 export const getAllProducts = async (req, res) => {
   try {
     const products = await Product.find({}).populate("category subCategory", "name slug");
@@ -56,9 +65,13 @@ export const getFeaturedProducts = async (req, res) => {
   }
 };
 
+// Replaces the existing createProduct export in productController.js —
+// swap this in for the old version. Everything else in that file
+// (getAllProducts, getProductById, deleteProduct, etc.) is unchanged.
+
 export const createProduct = async (req, res) => {
   try {
-    const { name, description, price, images, subCategory, stock, sizes, colors, brand } =
+    const { name, description, price, images, colors, subCategory, stock, sizes, brand } =
       req.body;
 
     // category is intentionally NOT accepted from the client — it's
@@ -78,25 +91,91 @@ export const createProduct = async (req, res) => {
       return res.status(400).json({ message: "Selected subcategory does not exist" });
     }
 
-    let normalizedImages = [];
-    if (Array.isArray(images)) {
-      normalizedImages = images.flat();
-    } else if (typeof images === "string") {
-      normalizedImages = [images];
+    const hasColors = Array.isArray(colors) && colors.length > 0;
+
+    // Products either use per-color galleries (clothing — colors is
+    // required, each with its own images) OR a single flat gallery
+    // (e.g. Body Lotions & Creams — no colors, just `images`). Mixing
+    // both on the same product isn't supported; pick one shape.
+    if (!hasColors) {
+      let normalizedImages = [];
+      if (Array.isArray(images)) {
+        normalizedImages = images.flat();
+      } else if (typeof images === "string") {
+        normalizedImages = [images];
+      }
+
+      if (normalizedImages.length === 0) {
+        return res.status(400).json({
+          message: "Provide at least one color with images, or at least one image",
+        });
+      }
+
+      const results = await Promise.allSettled(
+        normalizedImages.map((img) => cloudinary.uploader.upload(img, { folder: "products" })),
+      );
+
+      const failed = results.filter((r) => r.status === "rejected");
+      if (failed.length > 0) {
+        console.error(
+          "Some images failed to upload:",
+          failed.map((f) => f.reason),
+        );
+        return res.status(500).json({
+          message: "One or more images failed to upload. Please try again.",
+        });
+      }
+
+      const formattedImages = results.map((r) => ({
+        url: r.value.secure_url,
+        public_id: r.value.public_id,
+      }));
+
+      const product = await Product.create({
+        name,
+        description,
+        price,
+        images: formattedImages,
+        colors: [],
+        subCategory,
+        stock: stock || 0,
+        sizes: Array.isArray(sizes) ? sizes : undefined,
+        brand,
+      });
+
+      if (product.stock === 0) {
+        await redis.del("out_of_stock_products");
+      }
+      if (product.isFeatured) {
+        await updateFeaturedProductsCache();
+      }
+
+      return res.status(201).json(product);
     }
 
-    if (normalizedImages.length === 0) {
-      return res.status(400).json({ message: "At least one image is required" });
+    // ── Per-color upload path ────────────────────────────────────────────────
+    for (const color of colors) {
+      if (!color.name || !Array.isArray(color.images) || color.images.length === 0) {
+        return res.status(400).json({
+          message: "Each color needs a name and at least one image",
+        });
+      }
     }
 
-    const results = await Promise.allSettled(
-      normalizedImages.map((img) => cloudinary.uploader.upload(img, { folder: "products" })),
+    // Upload every color's images in parallel (across all colors at
+    // once, not color-by-color), then re-slice the flat results back
+    // into per-color groups using each color's image count — keeps
+    // this to a single Promise.allSettled instead of nested loops of
+    // sequential awaits.
+    const uploadJobs = colors.flatMap((color) =>
+      color.images.map((img) => cloudinary.uploader.upload(img, { folder: "products" })),
     );
+    const uploadResults = await Promise.allSettled(uploadJobs);
 
-    const failed = results.filter((r) => r.status === "rejected");
+    const failed = uploadResults.filter((r) => r.status === "rejected");
     if (failed.length > 0) {
       console.error(
-        "Some images failed to upload:",
+        "Some color images failed to upload:",
         failed.map((f) => f.reason),
       );
       return res.status(500).json({
@@ -104,27 +183,43 @@ export const createProduct = async (req, res) => {
       });
     }
 
-    const formattedImages = results.map((r) => ({
-      url: r.value.secure_url,
-      public_id: r.value.public_id,
-    }));
+    let cursor = 0;
+    const formattedColors = colors.map((color) => {
+      const count = color.images.length;
+      const slice = uploadResults.slice(cursor, cursor + count);
+      cursor += count;
+
+      return {
+        name: color.name,
+        hex: color.hex || undefined,
+        images: slice.map((r) => ({
+          url: r.value.secure_url,
+          public_id: r.value.public_id,
+        })),
+        // Was missing entirely before — each color's own size run
+        // (colors[i].sizes in the schema) needs to be carried through
+        // from the request body the same way name/hex/images are, or
+        // it silently never reaches the database even though the
+        // frontend sends it correctly.
+        sizes: Array.isArray(color.sizes) ? color.sizes : [],
+      };
+    });
 
     const product = await Product.create({
       name,
       description,
       price,
-      images: formattedImages,
+      images: [],
+      colors: formattedColors,
       subCategory,
       stock: stock || 0,
       sizes: Array.isArray(sizes) ? sizes : undefined,
-      colors: Array.isArray(colors) ? colors : undefined,
       brand,
     });
 
     if (product.stock === 0) {
       await redis.del("out_of_stock_products");
     }
-
     if (product.isFeatured) {
       await updateFeaturedProductsCache();
     }
@@ -190,33 +285,67 @@ export const getRecommendedProducts = async (req, res) => {
   }
 };
 
-// Category is now a document, not a free-text string — look it up by
+// Category is a document, not a free-text string — look it up by
 // slug (from the URL) rather than expecting a raw ObjectId there,
-// since slugs are what your frontend routes/links will actually use
+// since slugs are what your frontend routes/links actually use
 // (e.g. /category/male, not /category/64f...).
+//
+// Paginated, and optionally scoped to a subcategory via
+// ?subcategory=<slug> so the frontend can hit one endpoint for both
+// "all products in category" and "one subcategory within it" without
+// fetching everything up front.
 export const getProductsByCategory = async (req, res) => {
   const { slug } = req.params;
+  const { page, limit } = parsePagination(req.query);
+
   try {
     const category = await Category.findOne({ slug });
     if (!category) {
       return res.status(404).json({ message: "Category not found" });
     }
 
-    const products = await Product.find({ category: category._id }).populate(
-      "subCategory",
-      "name slug",
-    );
+    const filter = { category: category._id };
 
-    res.json({ category: { name: category.name, slug: category.slug }, products });
+    if (req.query.subcategory) {
+      const subcategory = await Subcategory.findOne({
+        slug: req.query.subcategory,
+        category: category._id,
+      });
+      if (!subcategory) {
+        return res.status(404).json({ message: "Subcategory not found" });
+      }
+      filter.subCategory = subcategory._id;
+    }
+
+    const [products, totalProducts] = await Promise.all([
+      Product.find(filter)
+        .populate("subCategory", "name slug")
+        .sort({ createdAt: -1 })
+        .skip((page - 1) * limit)
+        .limit(limit),
+      Product.countDocuments(filter),
+    ]);
+
+    res.json({
+      category: { name: category.name, slug: category.slug },
+      products,
+      currentPage: page,
+      totalPages: Math.max(1, Math.ceil(totalProducts / limit)),
+      totalProducts,
+    });
   } catch (error) {
     console.error("Error in getProductsByCategory controller", error.message);
     res.status(500).json({ message: "Server error" });
   }
 };
 
-// Same pattern, one level deeper — e.g. /category/male/subcategory/shoes
+// Same pattern, one level deeper — e.g. /category/male/subcategory/shoes.
+// Kept separate from getProductsByCategory for callers that already
+// know both slugs and want a clean nested URL rather than a query param.
 export const getProductsBySubcategory = async (req, res) => {
   const { categorySlug, subcategorySlug } = req.params;
+  const { page, limit } = parsePagination(req.query);
+
   try {
     const category = await Category.findOne({ slug: categorySlug });
     if (!category) {
@@ -231,15 +360,54 @@ export const getProductsBySubcategory = async (req, res) => {
       return res.status(404).json({ message: "Subcategory not found" });
     }
 
-    const products = await Product.find({ subCategory: subcategory._id });
+    const filter = { subCategory: subcategory._id };
+
+    const [products, totalProducts] = await Promise.all([
+      Product.find(filter)
+        .sort({ createdAt: -1 })
+        .skip((page - 1) * limit)
+        .limit(limit),
+      Product.countDocuments(filter),
+    ]);
 
     res.json({
       category: { name: category.name, slug: category.slug },
       subcategory: { name: subcategory.name, slug: subcategory.slug },
       products,
+      currentPage: page,
+      totalPages: Math.max(1, Math.ceil(totalProducts / limit)),
+      totalProducts,
     });
   } catch (error) {
     console.error("Error in getProductsBySubcategory controller", error.message);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+// Lightweight lookup used to build the subcategory filter pills on
+// the frontend without pulling in any products — otherwise, once
+// getProductsByCategory only returns one page at a time, the
+// frontend has no reliable way to know every subcategory that
+// exists under this category, only the ones on the current page.
+export const getSubcategoriesForCategory = async (req, res) => {
+  const { slug } = req.params;
+  try {
+    const category = await Category.findOne({ slug });
+    if (!category) {
+      return res.status(404).json({ message: "Category not found" });
+    }
+
+    const subcategories = await Subcategory.find(
+      { category: category._id },
+      "name slug",
+    ).sort({ name: 1 });
+
+    res.json({
+      category: { name: category.name, slug: category.slug },
+      subcategories,
+    });
+  } catch (error) {
+    console.error("Error in getSubcategoriesForCategory controller", error.message);
     res.status(500).json({ message: "Server error" });
   }
 };
@@ -312,7 +480,7 @@ export const updateProductStock = async (req, res) => {
   }
 };
 
-async function updateFeaturedProductsCache() {
+export const updateFeaturedProductsCache = async () => {
   try {
     const featuredProducts = await Product.find({ isFeatured: true })
       .populate("category subCategory", "name slug")
@@ -321,4 +489,4 @@ async function updateFeaturedProductsCache() {
   } catch (error) {
     console.error("Error updating featured products cache:", error.message);
   }
-}
+};

@@ -9,7 +9,7 @@ import {
   googleCallback,
 } from "../controllers/authController.js";
 import { protectRoute } from "../middlewares/authMiddleware.js";
-import passport from "passport";
+import passport from "../lib/passport.js";
 
 const router = express.Router();
 

@@ -74,7 +74,7 @@ export const signup = async (req, res) => {
       role: user.role,
     });
   } catch (error) {
-    console.error("Error in signup controller:", error); // full error/stack, not just .message
+    console.error("Error in signup controller:", error); 
     res.status(500).json({ message: "Server error" });
   }
 };
@@ -96,6 +96,7 @@ export const login = async (req, res) => {
       setCookies(res, accessToken, refreshToken);
 
       res.json({
+        message: "Logged in successfully",
         _id: user._id,
         name: user.name,
         email: user.email,
@@ -127,10 +128,10 @@ export const logout = async (req, res) => {
 
     res.clearCookie("accessToken");
     res.clearCookie("refreshToken");
-    res.json({ message: "Logged out successfully" });
+    return res.status(200).json({success: true, message: "Logged out successfully"});
   } catch (error) {
     console.log("Error in logout controller", error.message);
-    res.status(500).json({ message: "Server error" });
+    res.status(500).json({ success: false, message: "Server error" });
   }
 };
 

@@ -59,6 +59,8 @@ passport.use(
   } catch (err) {
     return cb(err, null);
   }
-}
+  }
+  )
+);
 
 export default passport;

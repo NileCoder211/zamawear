@@ -31,6 +31,19 @@ const userSchema = new mongoose.Schema(
           default: 1,
           min: 1,
         },
+        // Which color/size the customer picked on the product page.
+        // null means "no variant selected" (e.g. products with no
+        // color/size options, like creams) — used, not omitted, so
+        // equality checks in the cart controller behave consistently
+        // whether or not the product has variants.
+        color: {
+          type: String,
+          default: null,
+        },
+        size: {
+          type: String,
+          default: null,
+        },
       },
     ],
     role: {
@@ -59,10 +72,7 @@ const userSchema = new mongoose.Schema(
     // These fields are used by your verification/password-reset controllers.
     // Marked select: false so they never come back on normal queries, and
     // your controllers already explicitly .select("+field") them when needed.
-    verified: {
-      type: Boolean,
-      default: false,
-    },
+
     verificationCode: {
       type: String,
       select: false,

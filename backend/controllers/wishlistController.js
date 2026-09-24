@@ -6,9 +6,17 @@ export const getWishlist = async (req, res) => {
   try {
     const user = await User.findById(req.user._id).populate(
       "wishlist",
-      "name price images category stock",
+      "name price images category stock colors sizes isFeatured brand description",
     );
-    res.status(200).json(user.wishlist || []);
+
+    // Mongoose leaves a null slot in a populated array when the
+    // referenced doc no longer exists (product deleted after being
+    // wishlisted) — filter those out so the frontend never has to
+    // handle a null product, same as getCartProducts already does
+    // for cart lines.
+    const wishlist = (user.wishlist || []).filter(Boolean);
+
+    res.status(200).json(wishlist);
   } catch (error) {
     console.error("Error in getWishlist controller", error.message);
     res.status(500).json({ message: "Failed to fetch wishlist" });

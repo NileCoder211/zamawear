@@ -1,22 +1,40 @@
 import Product from "../models/productModel.js";
 import User from "../models/userModel.js";
 
+
+// Two cart lines are only "the same" when productId, color, AND size
+// all match — this is what lets the same product appear as two
+// independent lines (e.g. Black/M and White/L of the same shirt).
+// null (not undefined) means "no variant" so Mongo's equality checks
+// behave the same whether the product has variants or not.
+const normalizeVariant = (value) => value ?? null;
+
 // ─────────────────────────────────────────────────────────────
 // GET CART PRODUCTS
 // ─────────────────────────────────────────────────────────────
 export const getCartProducts = async (req, res) => {
   try {
-    const products = await Product.find({
-      _id: { $in: req.user.cartItems.map((item) => item.productId) },
-    });
+    const productIds = req.user.cartItems.map((item) => item.productId);
+    const products = await Product.find({ _id: { $in: productIds } });
+    const productMap = new Map(products.map((p) => [p._id.toString(), p]));
 
-    const cartItems = products.map((product) => {
-      const item = req.user.cartItems.find(
-        (cartItem) => cartItem.productId.toString() === product._id.toString()
-      );
-
-      return { ...product.toJSON(), quantity: item ? item.quantity : 1 };
-    });
+    // One entry PER CART LINE, not deduped by productId — two lines
+    // can reference the same product with different color/size, and
+    // each keeps its own cart-item _id (cartItemId) so the frontend
+    // can update/remove the right one specifically.
+    const cartItems = req.user.cartItems
+      .map((item) => {
+        const product = productMap.get(item.productId.toString());
+        if (!product) return null; // product was deleted since being added
+        return {
+          ...product.toJSON(),
+          cartItemId: item._id,
+          quantity: item.quantity,
+          color: item.color,
+          size: item.size,
+        };
+      })
+      .filter(Boolean);
 
     res.json(cartItems);
   } catch (error) {
@@ -30,7 +48,7 @@ export const getCartProducts = async (req, res) => {
 // ─────────────────────────────────────────────────────────────
 export const addToCart = async (req, res) => {
   try {
-    const { productId } = req.body;
+    const { productId, color, size } = req.body;
 
     if (!productId) {
       return res.status(400).json({ message: "productId is required" });
@@ -44,20 +62,39 @@ export const addToCart = async (req, res) => {
       return res.status(400).json({ message: "This product is out of stock" });
     }
 
-    // Try to increment an existing line item atomically first...
+    const normColor = normalizeVariant(color);
+    const normSize = normalizeVariant(size);
+
+    // Try to increment an existing line item — same productId AND
+    // color AND size — atomically first...
     const incremented = await User.updateOne(
-      { _id: req.user._id, "cartItems.productId": productId },
+      {
+        _id: req.user._id,
+        cartItems: {
+          $elemMatch: { productId, color: normColor, size: normSize },
+        },
+      },
       { $inc: { "cartItems.$.quantity": 1 } },
     );
 
-    // ...only push a new line item if there wasn't one to increment.
-    // Doing it this way (rather than read-then-decide-then-write)
-    // avoids a race where two rapid "add to cart" clicks both see
-    // "no existing item" and both push, creating a duplicate entry.
+    // ...only push a new line if there wasn't a matching one to
+    // increment. Same race-avoidance reasoning as before: doing this
+    // as increment-then-conditional-push (rather than read-then-
+    // decide-then-write) avoids two rapid "add to cart" clicks both
+    // seeing "no match" and both pushing duplicate lines.
     if (incremented.matchedCount === 0) {
       await User.updateOne(
         { _id: req.user._id },
-        { $push: { cartItems: { productId, quantity: 1 } } },
+        {
+          $push: {
+            cartItems: {
+              productId,
+              quantity: 1,
+              color: normColor,
+              size: normSize,
+            },
+          },
+        },
       );
     }
 
@@ -71,14 +108,17 @@ export const addToCart = async (req, res) => {
 
 // ─────────────────────────────────────────────────────────────
 // REMOVE ONE ITEM FROM CART
+// Keyed by the cart LINE's own _id now, not productId — productId
+// alone can no longer identify a single line once the same product
+// can appear multiple times with different color/size.
 // ─────────────────────────────────────────────────────────────
 export const removeFromCart = async (req, res) => {
   try {
-    const productId = req.params.id;
+    const cartItemId = req.params.id;
 
     await User.findByIdAndUpdate(
       req.user._id,
-      { $pull: { cartItems: { productId } } },
+      { $pull: { cartItems: { _id: cartItemId } } },
       { returnDocument: "after" },
     );
 
@@ -92,34 +132,35 @@ export const removeFromCart = async (req, res) => {
 
 // ─────────────────────────────────────────────────────────────
 // UPDATE QUANTITY
+// Also keyed by cart-line _id now, same reasoning as removeFromCart.
 // ─────────────────────────────────────────────────────────────
 export const updateQuantity = async (req, res) => {
   try {
-    const productId = req.params.id;
+    const cartItemId = req.params.id;
     const { quantity } = req.body;
 
     if (quantity === undefined || !Number.isInteger(quantity) || quantity < 0) {
-      return res.status(400).json({ message: "quantity must be a non-negative integer" });
+      return res
+        .status(400)
+        .json({ message: "quantity must be a non-negative integer" });
     }
 
     const user = await User.findById(req.user._id);
-    const cartItem = user.cartItems.find(
-      (item) => item.productId.toString() === String(productId),
-    );
+    const cartItem = user.cartItems.id(cartItemId);
 
     if (!cartItem) {
-      return res.status(404).json({ message: "Product not found in cart" });
+      return res.status(404).json({ message: "Cart item not found" });
     }
 
     if (quantity === 0) {
       user.cartItems = user.cartItems.filter(
-        (item) => item.productId.toString() !== String(productId),
+        (item) => item._id.toString() !== cartItemId,
       );
       await user.save();
       return res.json(user.cartItems);
     }
 
-    const product = await Product.findById(productId);
+    const product = await Product.findById(cartItem.productId);
     if (product && quantity > product.stock) {
       return res.status(400).json({
         message: `Only ${product.stock} in stock`,
@@ -137,8 +178,7 @@ export const updateQuantity = async (req, res) => {
 };
 
 // ─────────────────────────────────────────────────────────────
-// CLEAR CART (the only "wipe everything" path — removeFromCart no
-// longer doubles as this)
+// CLEAR CART
 // ─────────────────────────────────────────────────────────────
 export const clearCart = async (req, res) => {
   try {

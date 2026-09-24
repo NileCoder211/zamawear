@@ -2,11 +2,12 @@ import express from "express";
 import rateLimit from "express-rate-limit";
 import {
   stkPush,
-  mpesaCallback,
   confirmMpesaOrder,
+  mpesaCallback,
+  whatsappStkPush,
 } from "../controllers/mpesaController.js";
 
-import { protectRoute } from "../middleware/authMiddleware.js";
+import { protectRoute } from "../middlewares/authMiddleware.js";
 
 const router = express.Router();
 
@@ -62,5 +63,7 @@ router.post("/stkpush", protectRoute, stkPushLimiter, stkPush);
 router.post("/confirm", protectRoute, confirmMpesaOrder);
 
 router.post("/callback", restrictToSafaricom, mpesaCallback);
+
+router.post("/whatsapp-stkpush", whatsappStkPush);
 
 export default router;
