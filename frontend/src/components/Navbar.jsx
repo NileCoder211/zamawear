@@ -17,7 +17,7 @@ import { useUserStore } from "../stores/useUserStore";
 import { useCart } from "../queries/useCart";
 import { useWishlist } from "../queries/useWishlist";
 import { useCategories } from "../queries/useCategories";
-import { useSubcategories } from "../queries/useSubcategories";
+import { useSubcategories } from "../queries/useSubCategories";
 import SearchBox from "./SearchBox";
 
 function CategoryDropdown({ category, isOpen }) {
