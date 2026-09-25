@@ -1,4 +1,5 @@
 import { FaFacebook,FaInstagram,FaTiktok,FaWhatsapp,} from "react-icons/fa";
+import { Link } from "react-router-dom";
 
 
 function Footer() {
@@ -22,7 +23,9 @@ function Footer() {
         <div>
           <h4 className="text-[11px] tracking-[0.25em] uppercase text-black mb-4">Help</h4>
           <ul className="space-y-2 text-sm text-black">
-            <li>Track My Order</li><li>Payment Methods</li><li>Return &amp; Exchange Policy</li><li>Contact Us</li>
+            <li>Track My Order</li>
+            <li>FAQ</li>
+            <li>Contact Us</li>
           </ul>
         </div>
         <div>
@@ -72,9 +75,27 @@ function Footer() {
 </div>
         </div>
       </div>
-      <div className="border-t border-black/50 text-center text-sm text-black/50 py-5">
-        &copy; {new Date().getFullYear()} ZAMAWEAR. All rights reserved.
-      </div>
+      <div className="flex flex-col sm:flex-row items-center justify-between gap-4 border-t border-black/50 text-sm text-black/50 py-5 px-5">
+  <p>&copy; {new Date().getFullYear()} ZAMAWEAR. All rights reserved.</p>
+
+  <ul className="flex flex-wrap items-center justify-center gap-6 text-black">
+    <li>
+      <Link to="/privacy-policy" className="hover:text-red-600 transition-colors">
+        Privacy Policy
+      </Link>
+    </li>
+    <li>
+      <Link to="/terms-of-service" className="hover:text-red-600 transition-colors">
+        Terms of Service
+      </Link>
+    </li>
+    <li>
+      <Link to="/returns-exchanges" className="hover:text-red-600 transition-colors">
+        Returns and Exchange Policy
+      </Link>
+    </li>
+  </ul>
+</div>
     </footer>
     </>
   );

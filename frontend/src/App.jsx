@@ -20,6 +20,9 @@ import MpesaCancelPage from './pages/MpesaCancelPage';
 import PurchaseSuccessPage from './pages/PurchaseSuccessPage';
 import PurchaseCancelPage from './pages/PurchaseCancelPage';
 import SearchResultsPage from "./pages/SearchResultsPage";
+import PrivacyPolicy from "./pages/PrivacyPolicy";
+import TermsOfService from './pages/TermsOfService';
+import ReturnsExchanges from './pages/RuturnExchange';
 
 import ProductCard from './components/ProductCard';
 import VideoCard from "./components/VideoCard";
@@ -45,6 +48,9 @@ function App() {
     <Routes>
       <Route path="/" element={< HomePage/>} />
       <Route path="/cart" element={< CartPage  />} />
+      <Route path="/privacy-policy" element={< PrivacyPolicy  />} />
+      <Route path="/terms-of-service" element={< TermsOfService  />} />
+      <Route path="/returns-exchanges" element={< ReturnsExchanges  />} />
 
       <Route path="/login" 
       element={ !user ? < LoginPage/> : <Navigate to="/" />} />
