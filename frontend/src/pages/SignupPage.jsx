@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Loader2 } from "lucide-react";
 import FormField from "../components/FormField";
 import GoogleAuthButton from "../components/GoogleAuthButton";
-import { validateSignUpForm, getPasswordError } from "../components/authValidation";
+import { validateSignUpForm, getPasswordError } from "../components/AuthValidation";
 import {useUserStore} from "../stores/useUserStore";
 
 

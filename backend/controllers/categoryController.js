@@ -1,5 +1,5 @@
 import Category from "../models/categoryModel.js";
-import Subcategory from "../models/subcategoryModel.js";
+import Subcategory from "../models/subCategoryModel.js";
 
 // Public — storefront navigation. Admin panel can pass
 // ?includeInactive=true to also see disabled categories for management.

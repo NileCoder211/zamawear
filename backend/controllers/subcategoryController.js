@@ -1,4 +1,4 @@
-import Subcategory from "../models/subcategoryModel.js";
+import Subcategory from "../models/subCategoryModel.js";
 import Category from "../models/categoryModel.js";
 import Product from "../models/productModel.js";
 

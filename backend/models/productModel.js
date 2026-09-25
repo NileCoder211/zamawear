@@ -1,5 +1,5 @@
 import mongoose from "mongoose";
-import Subcategory from "./subcategoryModel.js";
+import Subcategory from "./subCategoryModel.js";
 
 const productSchema = new mongoose.Schema(
   {

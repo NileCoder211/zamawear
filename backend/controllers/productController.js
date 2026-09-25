@@ -2,7 +2,7 @@ import { redis } from "../lib/redis.js";
 import cloudinary from "../lib/cloudinary.js";
 import Product from "../models/productModel.js";
 import Category from "../models/categoryModel.js";
-import Subcategory from "../models/subcategoryModel.js";
+import Subcategory from "../models/subCategoryModel.js";
 
 const MAX_LIMIT = 48;
 const DEFAULT_LIMIT = 12;

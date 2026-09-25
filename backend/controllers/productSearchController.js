@@ -1,6 +1,6 @@
 import Product from "../models/productModel.js";
 import Category from "../models/categoryModel.js"; // adjust filename if yours differs
-import Subcategory from "../models/subcategoryModel.js";
+import Subcategory from "../models/subCategoryModel.js";
 
 const escapeRegex = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 

@@ -6,7 +6,7 @@ import dotenv from "dotenv";
 import path from "path";
 import { fileURLToPath } from "url";
 import Category from "../models/categoryModel.js";
-import Subcategory from "../models/subcategoryModel.js";
+import Subcategory from "../models/subCategoryModel.js";
 
 // .env lives in the project root (zamawear/), one level above backend/,
 // so we can't rely on dotenv finding it from the current working directory.
