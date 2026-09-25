@@ -23,6 +23,9 @@ import SearchResultsPage from "./pages/SearchResultsPage";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
 import TermsOfService from './pages/TermsOfService';
 import ReturnsExchanges from './pages/RuturnExchange';
+import DeleteAccountPage from "./pages/DeleteAccountPage";
+import ForgotPasswordPage from "./pages/ForgotPasswordPage";
+import AccountDeletionInfoPage from './pages/AccountDeletionInfoPage';
 
 import ProductCard from './components/ProductCard';
 import VideoCard from "./components/VideoCard";
@@ -51,7 +54,9 @@ function App() {
       <Route path="/privacy-policy" element={< PrivacyPolicy  />} />
       <Route path="/terms-of-service" element={< TermsOfService  />} />
       <Route path="/returns-exchanges" element={< ReturnsExchanges  />} />
-
+      <Route path="/forgot-password" element={< ForgotPasswordPage  />} />
+      <Route path="/delete-account" element={< DeleteAccountPage  />} />
+      <Route path="/account-deletion-info" element={< AccountDeletionInfoPage  />} />
       <Route path="/login" 
       element={ !user ? < LoginPage/> : <Navigate to="/" />} />
 

@@ -7,6 +7,9 @@ import {
   refreshToken,
   getProfile,
   googleCallback,
+  sendForgotPasswordCode,
+  verifyForgotPasswordCode,
+  deleteAccount,
 } from "../controllers/authController.js";
 import { protectRoute } from "../middlewares/authMiddleware.js";
 import passport from "../lib/passport.js";
@@ -29,13 +32,21 @@ router.post("/logout", logout);
 router.post("/refresh-token", refreshToken);
 router.get("/profile", protectRoute, getProfile);
 
+// Forgot password — same limiter as login/signup, since both steps
+// are guessable-input endpoints (email existence / 6-digit code).
+router.post("/forgot-password/send", authLimiter, sendForgotPasswordCode);
+router.post("/forgot-password/verify", authLimiter, verifyForgotPasswordCode);
+
+// Delete account (grace-period soft delete) — must be logged in.
+router.delete("/delete-account", protectRoute, deleteAccount);
+
 // Redirect to Google
 router.get(
   "/google",
   passport.authenticate("google", {
     scope: ["profile", "email"],
     session: false,
-  })
+  }),
 );
 
 // Google callback

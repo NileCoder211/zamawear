@@ -80,18 +80,23 @@ function Footer() {
 
   <ul className="flex flex-wrap items-center justify-center gap-6 text-black">
     <li>
-      <Link to="/privacy-policy" className="hover:text-red-600 transition-colors">
+      <Link to="/privacy-policy" onClick={() => window.scrollTo(0, 0)} className="hover:text-red-600 transition-colors">
         Privacy Policy
       </Link>
     </li>
     <li>
-      <Link to="/terms-of-service" className="hover:text-red-600 transition-colors">
+      <Link to="/terms-of-service" onClick={() => window.scrollTo(0, 0)} className="hover:text-red-600 transition-colors">
         Terms of Service
       </Link>
     </li>
     <li>
-      <Link to="/returns-exchanges" className="hover:text-red-600 transition-colors">
+      <Link to="/returns-exchanges" onClick={() => window.scrollTo(0, 0)} className="hover:text-red-600 transition-colors">
         Returns and Exchange Policy
+      </Link>
+    </li>
+    <li>
+      <Link to="/account-deletion-info" onClick={() => window.scrollTo(0, 0)} className="hover:text-red-600 transition-colors">
+        Account Deletion Information
       </Link>
     </li>
   </ul>

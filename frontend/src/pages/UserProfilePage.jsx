@@ -8,6 +8,7 @@ import Sidebar from "../components/Sidebar";
 import ProfileSection from "../components/ProfileSection";
 import OrdersSection from "../components/OrdersSection";
 import SavedPiecesSection from "../components/SavedPiecesSection";
+import SettingsSection from "../components/SettingsSection";
 
 const FONT_LINK =
   "https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Poppins:wght@300;400;500;600&display=swap";
@@ -49,8 +50,10 @@ const UserProfilePage = () => {
         );
       case "saved":
         return <SavedPiecesSection />;
-      // "addresses" and "settings" fall through to the default view
-      // below — no dedicated section built for either yet.
+      case "settings":
+        return <SettingsSection user={user} />;
+      // "addresses" falls through to the default view below — no
+      // dedicated section built for it yet.
       default:
         return <ProfileSection user={user} />;
     }
